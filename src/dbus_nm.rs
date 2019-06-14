@@ -87,6 +87,84 @@ impl DBusNetworkManager {
         Ok(array.map(|e| e.to_string()).collect())
     }
 
+    pub fn add_connection(&self, ssid: &str, interface: &str, credentials: &AccessPointCredentials) -> Result<String> {
+        let mut settings: HashMap<String, VariantMap> = HashMap::new();
+
+        let mut connection: VariantMap = HashMap::new();
+        add_str(&mut connection, "type", "802-11-wireless");
+        add_str(&mut connection, "interface-name", interface);
+        add_str(&mut connection, "id", ssid);
+        settings.insert("connection".to_string(), connection);
+
+        let mut wireless: VariantMap = HashMap::new();
+        add_val(
+            &mut wireless,
+            "ssid",
+            ssid.as_ssid_slice().unwrap().as_bytes().to_vec(),
+        );
+        settings.insert("802-11-wireless".to_string(), wireless);
+
+        match *credentials {
+            AccessPointCredentials::Wep { ref passphrase } => {
+                let mut security_settings: VariantMap = HashMap::new();
+
+                add_val(
+                    &mut security_settings,
+                    "wep-key-type",
+                    NM_WEP_KEY_TYPE_PASSPHRASE,
+                );
+                add_str(
+                    &mut security_settings,
+                    "wep-key0",
+                    verify_ascii_password(passphrase)?,
+                );
+
+                settings.insert("802-11-wireless-security".to_string(), security_settings);
+            },
+            AccessPointCredentials::Wpa { ref passphrase } => {
+                let mut security_settings: VariantMap = HashMap::new();
+
+                add_str(&mut security_settings, "key-mgmt", "wpa-psk");
+                add_str(
+                    &mut security_settings,
+                    "psk",
+                    verify_ascii_password(passphrase)?,
+                );
+
+                settings.insert("802-11-wireless-security".to_string(), security_settings);
+            },
+            AccessPointCredentials::Enterprise {
+                ref identity,
+                ref passphrase,
+            } => {
+                let mut security_settings: VariantMap = HashMap::new();
+
+                add_str(&mut security_settings, "key-mgmt", "wpa-eap");
+
+                let mut eap: VariantMap = HashMap::new();
+                add_val(&mut eap, "eap", vec!["peap".to_string()]);
+                add_str(&mut eap, "identity", identity as &str);
+                add_str(&mut eap, "password", passphrase as &str);
+                add_str(&mut eap, "phase2-auth", "mschapv2");
+
+                settings.insert("802-11-wireless-security".to_string(), security_settings);
+                settings.insert("802-1x".to_string(), eap);
+            },
+            AccessPointCredentials::None => {},
+        };
+
+        let response = self.dbus.call_with_args(
+            NM_SETTINGS_PATH,
+            NM_SETTINGS_INTERFACE,
+            "AddConnection",
+            &[&settings as &RefArg],
+        )?;
+
+        let path: Path = self.dbus.extract(&response)?;
+
+        path_to_string(&path)
+    }
+
     pub fn get_active_connections(&self) -> Result<Vec<String>> {
         self.dbus
             .property(NM_SERVICE_PATH, NM_SERVICE_INTERFACE, "ActiveConnections")

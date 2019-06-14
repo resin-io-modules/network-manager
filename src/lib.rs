@@ -16,6 +16,7 @@ extern crate dbus;
 
 extern crate ascii;
 
+#[allow(deprecated)]
 pub mod errors;
 
 mod dbus_nm;

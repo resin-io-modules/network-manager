@@ -225,6 +225,28 @@ pub fn get_connections(dbus_manager: &Rc<DBusNetworkManager>) -> Result<Vec<Conn
     Ok(connections)
 }
 
+pub fn add_connection(
+    dbus_manager: &Rc<DBusNetworkManager>,
+    ssid: &str,
+    interface: &str,
+    credentials: &AccessPointCredentials
+) -> Result<Connection> {
+    let path = dbus_manager.add_connection(ssid, interface, credentials)?;
+
+    let connection = Connection::init(dbus_manager, &path)?;
+
+    Ok(connection)
+}
+
+pub fn connect_device(
+    dbus_manager: &Rc<DBusNetworkManager>,
+    device_path: &str,
+) -> Result<()> {
+    let _ = dbus_manager.activate_connection(device_path)?;
+
+    Ok(())
+}
+
 pub fn get_active_connections(dbus_manager: &Rc<DBusNetworkManager>) -> Result<Vec<Connection>> {
     let active_paths = dbus_manager.get_active_connections()?;
 
