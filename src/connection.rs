@@ -211,6 +211,36 @@ impl From<i64> for ConnectionState {
     }
 }
 
+/// Connection configuration parameters.
+pub struct ConnectionConfig<'a> {
+    /// List of IPv4 DNS servers to use
+    pub dns4: Option<&'a Vec<Ipv4Addr>>
+}
+
+/// Use this struct to build a ConnectionConfig.
+pub struct ConnectionConfigBuilder<'a> {
+    dns4: Option<&'a Vec<Ipv4Addr>>
+}
+
+impl<'a> ConnectionConfigBuilder<'a> {
+    pub fn new() -> Self {
+        Self {
+            dns4: None,
+        }
+    }
+
+    pub fn dns4(mut self, dns4: Option<&'a Vec<Ipv4Addr>>) -> Self {
+        self.dns4 = dns4;
+        self
+    }
+
+    pub fn build(self) -> ConnectionConfig<'a> {
+        ConnectionConfig {
+            dns4: self.dns4,
+        }
+    }
+}
+
 pub fn get_connections(dbus_manager: &Rc<DBusNetworkManager>) -> Result<Vec<Connection>> {
     let paths = dbus_manager.list_connections()?;
 
@@ -241,15 +271,12 @@ pub fn get_active_connections(dbus_manager: &Rc<DBusNetworkManager>) -> Result<V
     Ok(connections)
 }
 
-pub fn connect_to_access_point(
+fn connect_to_access_point_impl(
     dbus_manager: &Rc<DBusNetworkManager>,
-    device_path: &str,
-    access_point: &AccessPoint,
-    credentials: &AccessPointCredentials,
+    path: &String,
 ) -> Result<(Connection, ConnectionState)> {
-    let (path, _) = dbus_manager.connect_to_access_point(device_path, access_point, credentials)?;
 
-    let connection = Connection::init(dbus_manager, &path)?;
+    let connection = Connection::init(dbus_manager, path)?;
 
     let state = wait(
         &connection,
@@ -258,6 +285,29 @@ pub fn connect_to_access_point(
     )?;
 
     Ok((connection, state))
+}
+
+pub fn connect_to_access_point(
+    dbus_manager: &Rc<DBusNetworkManager>,
+    device_path: &str,
+    access_point: &AccessPoint,
+    credentials: &AccessPointCredentials,
+) -> Result<(Connection, ConnectionState)> {
+    let (path, _) = dbus_manager.connect_to_access_point(device_path, access_point, credentials)?;
+
+    connect_to_access_point_impl(dbus_manager, &path)
+}
+
+pub fn connect_to_access_point_with_config(
+    dbus_manager: &Rc<DBusNetworkManager>,
+    device_path: &str,
+    access_point: &AccessPoint,
+    credentials: &AccessPointCredentials,
+    config: &ConnectionConfig
+) -> Result<(Connection, ConnectionState)> {
+    let (path, _) = dbus_manager.connect_to_access_point_with_config(device_path, access_point, credentials, config)?;
+
+    connect_to_access_point_impl(dbus_manager, &path)
 }
 
 pub fn create_hotspot<S>(

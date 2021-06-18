@@ -4,7 +4,8 @@ use std::net::Ipv4Addr;
 use errors::*;
 use dbus_nm::DBusNetworkManager;
 
-use connection::{connect_to_access_point, create_hotspot, Connection, ConnectionState};
+use connection::{connect_to_access_point, connect_to_access_point_with_config, 
+    create_hotspot, Connection, ConnectionState, ConnectionConfig};
 use device::{Device, PathGetter};
 use ssid::{AsSsidSlice, Ssid, SsidSlice};
 
@@ -63,6 +64,22 @@ impl<'a> WiFiDevice<'a> {
             access_point,
             credentials,
         )
+    }
+
+    pub fn connect_with_config(
+        &self,
+        access_point: &AccessPoint,
+        credentials: &AccessPointCredentials,
+        config: &ConnectionConfig,
+    ) -> Result<(Connection, ConnectionState)> {
+        connect_to_access_point_with_config(
+            &self.dbus_manager,
+            self.device.path(),
+            access_point,
+            credentials,
+            config
+        )
+
     }
 
     pub fn create_hotspot<T>(

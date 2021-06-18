@@ -9,7 +9,7 @@ use ascii::AsciiStr;
 use errors::*;
 use dbus_api::{extract, path_to_string, DBusApi, VariantTo, variant_iter_to_vec_u8};
 use manager::{Connectivity, NetworkManagerState};
-use connection::{ConnectionSettings, ConnectionState};
+use connection::{ConnectionSettings, ConnectionState, ConnectionConfig};
 use ssid::{AsSsidSlice, Ssid};
 use device::{DeviceState, DeviceType};
 use wifi::{AccessPoint, AccessPointCredentials, NM80211ApFlags, NM80211ApSecurityFlags};
@@ -187,11 +187,12 @@ impl DBusNetworkManager {
         Ok(())
     }
 
-    pub fn connect_to_access_point(
+    fn connect_to_access_point_impl(
         &self,
         device_path: &str,
         access_point: &AccessPoint,
         credentials: &AccessPointCredentials,
+        config_maybe: Option<&ConnectionConfig>,
     ) -> Result<(String, String)> {
         let mut settings: HashMap<String, VariantMap> = HashMap::new();
 
@@ -252,6 +253,24 @@ impl DBusNetworkManager {
             AccessPointCredentials::None => {},
         };
 
+        // Extra config
+        if let Some(config) = config_maybe {
+            // Add DNS information
+            if let Some(dns4) = config.dns4 {
+                let mut ipv4_variant: VariantMap = HashMap::new();
+                add_val(&mut ipv4_variant, "ignore-auto-dns", true);
+                add_str(&mut ipv4_variant, "method", "auto");
+                add_val(
+                    &mut ipv4_variant, 
+                    "dns",
+                    dns4.iter()
+                        .map(|x| u32::from(x.clone()))
+                        .collect::<Vec<u32>>()
+                );
+                settings.insert("ipv4".to_string(), ipv4_variant);
+            };
+        };
+
         let response = self.dbus.call_with_args(
             NM_SERVICE_PATH,
             NM_SERVICE_INTERFACE,
@@ -269,6 +288,36 @@ impl DBusNetworkManager {
             path_to_string(&conn_path)?,
             path_to_string(&active_connection)?,
         ))
+
+    }
+
+    pub fn connect_to_access_point(
+        &self,
+        device_path: &str,
+        access_point: &AccessPoint,
+        credentials: &AccessPointCredentials,
+    ) -> Result<(String, String)> {
+        self.connect_to_access_point_impl(
+            device_path,
+            access_point,
+            credentials,
+            None,
+        )
+    }
+
+    pub fn connect_to_access_point_with_config(
+        &self,
+        device_path: &str,
+        access_point: &AccessPoint,
+        credentials: &AccessPointCredentials,
+        config: &ConnectionConfig,
+    ) -> Result<(String, String)> {
+        self.connect_to_access_point_impl(
+            device_path,
+            access_point,
+            credentials,
+            Some(config),
+        )
     }
 
     pub fn create_hotspot<T>(
